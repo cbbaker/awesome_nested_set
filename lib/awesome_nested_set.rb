@@ -457,7 +457,8 @@ module CollectiveIdea #:nodoc:
         
         # on creation, set automatically lft and rgt to the end of the tree
         def set_default_left_and_right
-          maxright = nested_set_scope.maximum(right_column_name) || 0
+          highest_right_row = nested_set_scope.find(:first, :order => "#{quoted_right_column_name} desc", :limit => 1,:lock => true )
+          maxright = highest_right_row ? highest_right_row[right_column_name] : 0
           # adds the new node to the right of all existing nodes
           self[left_column_name] = maxright + 1
           self[right_column_name] = maxright + 2
@@ -541,7 +542,14 @@ module CollectiveIdea #:nodoc:
             # so sorting puts both the intervals and their boundaries in order
             a, b, c, d = [self[left_column_name], self[right_column_name], bound, other_bound].sort
 
-            new_parent = case position
+            # select the rows in the model between a and d, and apply a lock
+            self.class.base_class.find(:all,
+              :select => "id",
+              :conditions => ["#{quoted_left_column_name} >= :a and #{quoted_right_column_name} <= :d", {:a => a, :d => d}],
+              :lock => true
+            )
+
+           new_parent = case position
               when :child;  target.id
               when :root;   nil
               else          target[parent_column_name]
